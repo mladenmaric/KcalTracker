@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "WebFetch(domain:onefit.rs)",
+      "WebFetch(domain:www.tablicakalorija.com)"
     ]
   }
 }
