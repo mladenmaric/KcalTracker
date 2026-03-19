@@ -5,11 +5,25 @@ import '../models/food_definition.dart';
 import '../providers/food_database_provider.dart';
 
 // FoodDatabaseScreen — browse, add, edit, and delete food definitions.
-class FoodDatabaseScreen extends ConsumerWidget {
+class FoodDatabaseScreen extends ConsumerStatefulWidget {
   const FoodDatabaseScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FoodDatabaseScreen> createState() => _FoodDatabaseScreenState();
+}
+
+class _FoodDatabaseScreenState extends ConsumerState<FoodDatabaseScreen> {
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final foodsAsync = ref.watch(foodDefinitionsProvider);
 
     return Scaffold(
@@ -23,45 +37,83 @@ class FoodDatabaseScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: foodsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (foods) => ListView.builder(
-          itemCount: foods.length,
-          itemBuilder: (context, i) {
-            final food = foods[i];
-            return ListTile(
-              title: Text(food.name),
-              subtitle: Text(
-                '${food.caloriesPer100g.toStringAsFixed(0)} kcal  '
-                '| P ${food.proteinPer100g}g  '
-                '| C ${food.carbsPer100g}g  '
-                '| F ${food.fatPer100g}g  (per 100g)',
-                style: Theme.of(context).textTheme.bodySmall,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Search foods…',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                border: const OutlineInputBorder(),
+                isDense: true,
               ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => _showEditDialog(context, ref, food),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () =>
-                        _confirmDelete(context, ref, food),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+              onChanged: (v) => setState(() => _searchQuery = v),
+            ),
+          ),
+          Expanded(
+            child: foodsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Error: $e')),
+              data: (foods) {
+                final filtered = _searchQuery.isEmpty
+                    ? foods
+                    : foods
+                        .where((f) => f.name
+                            .toLowerCase()
+                            .contains(_searchQuery.toLowerCase()))
+                        .toList();
+                if (filtered.isEmpty) {
+                  return const Center(child: Text('No foods found.'));
+                }
+                return ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) {
+                    final food = filtered[i];
+                    return ListTile(
+                      title: Text(food.name),
+                      subtitle: Text(
+                        '${food.caloriesPer100g.toStringAsFixed(0)} kcal  '
+                        '| P ${food.proteinPer100g}g  '
+                        '| C ${food.carbsPer100g}g  '
+                        '| F ${food.fatPer100g}g  (per 100g)',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: () => _showEditDialog(context, ref, food),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => _confirmDelete(context, ref, food),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  void _confirmDelete(
-      BuildContext context, WidgetRef ref, FoodDefinition food) {
+  void _confirmDelete(BuildContext context, WidgetRef ref, FoodDefinition food) {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -87,8 +139,7 @@ class FoodDatabaseScreen extends ConsumerWidget {
     );
   }
 
-  void _showEditDialog(
-      BuildContext context, WidgetRef ref, FoodDefinition? existing) {
+  void _showEditDialog(BuildContext context, WidgetRef ref, FoodDefinition? existing) {
     showDialog<void>(
       context: context,
       builder: (ctx) => _FoodEditDialog(existing: existing),
@@ -137,15 +188,17 @@ class _FoodEditDialogState extends ConsumerState<_FoodEditDialog> {
     super.dispose();
   }
 
+  String _normalizeDecimal(String v) => v.replaceAll(',', '.');
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final def = FoodDefinition(
       id: widget.existing?.id,
       name: _name.text.trim(),
-      caloriesPer100g: double.parse(_kcal.text),
-      proteinPer100g: double.parse(_protein.text),
-      carbsPer100g: double.parse(_carbs.text),
-      fatPer100g: double.parse(_fat.text),
+      caloriesPer100g: double.parse(_normalizeDecimal(_kcal.text)),
+      proteinPer100g: double.parse(_normalizeDecimal(_protein.text)),
+      carbsPer100g: double.parse(_normalizeDecimal(_carbs.text)),
+      fatPer100g: double.parse(_normalizeDecimal(_fat.text)),
     );
     final notifier = ref.read(foodDefinitionsProvider.notifier);
     if (widget.existing == null) {
@@ -204,7 +257,7 @@ class _FoodEditDialogState extends ConsumerState<_FoodEditDialog> {
         ),
         validator: (v) {
           if (v == null || v.trim().isEmpty) return 'Required';
-          if (!isText && double.tryParse(v) == null) return 'Enter a number';
+          if (!isText && double.tryParse(_normalizeDecimal(v)) == null) return 'Enter a number';
           return null;
         },
       ),

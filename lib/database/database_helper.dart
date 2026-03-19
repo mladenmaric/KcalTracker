@@ -1582,6 +1582,25 @@ class DatabaseHelper {
     return meals;
   }
 
+  Future<List<Meal>> getMealsForDateRange(DateTime start, DateTime end) async {
+    final db = await database;
+    final startStr = start.toIso8601String().substring(0, 10);
+    final endStr = end.toIso8601String().substring(0, 10);
+    final rows = await db.query(
+      'meals',
+      where: "substr(date, 1, 10) BETWEEN ? AND ?",
+      whereArgs: [startStr, endStr],
+      orderBy: 'date ASC',
+    );
+    final meals = <Meal>[];
+    for (final row in rows) {
+      final meal = Meal.fromMap(row);
+      final items = await getFoodItemsForMeal(meal.id!);
+      meals.add(meal.copyWith(foodItems: items));
+    }
+    return meals;
+  }
+
   Future<void> deleteMeal(int id) async {
     final db = await database;
     await db.delete('meals', where: 'id = ?', whereArgs: [id]);
@@ -1626,6 +1645,20 @@ class DatabaseHelper {
     return rows.map(SleepEntry.fromMap).toList();
   }
 
+  Future<List<SleepEntry>> getSleepForDateRange(
+      DateTime start, DateTime end) async {
+    final db = await database;
+    final startStr = start.toIso8601String().substring(0, 10);
+    final endStr = end.toIso8601String().substring(0, 10);
+    final rows = await db.query(
+      'sleep_entries',
+      where: "substr(date, 1, 10) BETWEEN ? AND ?",
+      whereArgs: [startStr, endStr],
+      orderBy: 'date ASC',
+    );
+    return rows.map(SleepEntry.fromMap).toList();
+  }
+
   Future<void> upsertSleep(SleepEntry entry) async {
     final db = await database;
     await db.insert('sleep_entries', entry.toMap(),
@@ -1653,6 +1686,20 @@ class DatabaseHelper {
     return WeightEntry.fromMap(rows.first);
   }
 
+  Future<List<WeightEntry>> getWeightForDateRange(
+      DateTime start, DateTime end) async {
+    final db = await database;
+    final startStr = start.toIso8601String().substring(0, 10);
+    final endStr = end.toIso8601String().substring(0, 10);
+    final rows = await db.query(
+      'weight_entries',
+      where: "substr(date, 1, 10) BETWEEN ? AND ?",
+      whereArgs: [startStr, endStr],
+      orderBy: 'date ASC',
+    );
+    return rows.map(WeightEntry.fromMap).toList();
+  }
+
   Future<int> insertWeight(WeightEntry entry) async {
     final db = await database;
     return db.insert('weight_entries', entry.toMap());
@@ -1669,6 +1716,20 @@ class DatabaseHelper {
     final db = await database;
     final dateStr = date.toIso8601String().substring(0, 10);
     final rows = await db.query('training_entries', where: 'date LIKE ?', whereArgs: ['$dateStr%'], orderBy: 'date ASC');
+    return rows.map(TrainingEntry.fromMap).toList();
+  }
+
+  Future<List<TrainingEntry>> getTrainingForDateRange(
+      DateTime start, DateTime end) async {
+    final db = await database;
+    final startStr = start.toIso8601String().substring(0, 10);
+    final endStr = end.toIso8601String().substring(0, 10);
+    final rows = await db.query(
+      'training_entries',
+      where: "substr(date, 1, 10) BETWEEN ? AND ?",
+      whereArgs: [startStr, endStr],
+      orderBy: 'date ASC',
+    );
     return rows.map(TrainingEntry.fromMap).toList();
   }
 

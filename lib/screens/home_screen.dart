@@ -19,6 +19,11 @@ class HomeScreen extends ConsumerWidget {
         title: Text(DateFormat('EEE, MMM d').format(selectedDate)),
         actions: [
           IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: 'Weekly stats',
+            onPressed: () => context.pushNamed('weekly-stats'),
+          ),
+          IconButton(
             icon: const Icon(Icons.track_changes),
             tooltip: 'Goals',
             onPressed: () => context.pushNamed('goals'),

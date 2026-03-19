@@ -12,6 +12,7 @@ import '../screens/plan_history_screen.dart';
 import '../screens/planner_screen.dart';
 import '../screens/sleep_screen.dart';
 import '../screens/training_screen.dart';
+import '../screens/weekly_stats_screen.dart';
 import '../screens/weight_screen.dart';
 
 final appRouter = GoRouter(
@@ -87,6 +88,11 @@ final appRouter = GoRouter(
       path: '/plan-history',
       name: 'plan-history',
       builder: (context, state) => const PlanHistoryScreen(),
+    ),
+    GoRoute(
+      path: '/weekly-stats',
+      name: 'weekly-stats',
+      builder: (context, state) => const WeeklyStatsScreen(),
     ),
   ],
 );

@@ -70,7 +70,7 @@ class _AddFoodItemScreenState extends ConsumerState<AddFoodItemScreen>
 
   // ── Grams & preview ──────────────────────────────────────────────────────
 
-  double get _grams => double.tryParse(_gramsCtrl.text) ?? 0;
+  double get _grams => double.tryParse(_gramsCtrl.text.replaceAll(',', '.')) ?? 0;
 
   ({double kcal, double protein, double carbs, double fat}) get _preview {
     final def = _selected;
@@ -400,7 +400,7 @@ class _GramsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasGrams = (double.tryParse(gramsCtrl.text) ?? 0) > 0;
+    final hasGrams = (double.tryParse(gramsCtrl.text.replaceAll(',', '.')) ?? 0) > 0;
 
     return Container(
       decoration: BoxDecoration(

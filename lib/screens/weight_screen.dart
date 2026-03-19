@@ -104,7 +104,7 @@ class WeightScreen extends ConsumerWidget {
               child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
-              final kg = double.tryParse(ctrl.text);
+              final kg = double.tryParse(ctrl.text.replaceAll(',', '.'));
               if (kg != null && kg > 0) {
                 ref.read(weightProvider.notifier).add(kg);
                 Navigator.pop(ctx);
