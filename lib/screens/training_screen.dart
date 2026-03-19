@@ -5,21 +5,23 @@ import 'package:intl/intl.dart';
 import '../models/training_entry.dart';
 import '../providers/meals_provider.dart';
 import '../providers/training_provider.dart';
+import '../widgets/date_navigation.dart';
 
 class TrainingScreen extends ConsumerWidget {
   const TrainingScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final date = ref.watch(selectedDateProvider);
+    final date          = ref.watch(selectedDateProvider);
     final trainingAsync = ref.watch(trainingProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Training — ${DateFormat('MMM d').format(date)}'),
+        title: const DateNavigator(),
         actions: [
           IconButton(
             icon: const Icon(Icons.calendar_today),
+            tooltip: 'Jump to date',
             onPressed: () async {
               final picked = await showDatePicker(
                 context: context,
@@ -36,43 +38,60 @@ class TrainingScreen extends ConsumerWidget {
       ),
       body: trainingAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (entries) {
+        error:   (e, _) => Center(child: Text('Error: $e')),
+        data:    (entries) {
           if (entries.isEmpty) {
             return const Center(
-              child: Text('No training logged today.\nTap + to add.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey)),
+              child: Text(
+                'No training logged.\nTap + to add.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
             );
           }
           return ListView.builder(
             padding: const EdgeInsets.all(8),
             itemCount: entries.length,
-            itemBuilder: (context, i) =>
-                _TrainingTile(entry: entries[i], ref: ref),
+            itemBuilder: (context, i) {
+              final entry = entries[i];
+              return Dismissible(
+                key: Key('training-${entry.id}'),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  color: Colors.red,
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 16),
+                  child: const Icon(Icons.delete, color: Colors.white),
+                ),
+                onDismissed: (_) {
+                  ref.read(trainingProvider.notifier).delete(entry.id!);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('${entry.type} session deleted')),
+                  );
+                },
+                child: _TrainingTile(entry: entry),
+              );
+            },
           );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddDialog(context, ref),
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (ctx) => const _AddTrainingDialog(),
+        ),
         icon: const Icon(Icons.fitness_center),
         label: const Text('Log Workout'),
       ),
     );
   }
-
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => const _AddTrainingDialog(),
-    );
-  }
 }
 
+// Pure display tile — delete is handled via Dismissible in the parent.
 class _TrainingTile extends StatelessWidget {
   final TrainingEntry entry;
-  final WidgetRef ref;
-  const _TrainingTile({required this.entry, required this.ref});
+  const _TrainingTile({required this.entry});
 
   @override
   Widget build(BuildContext context) => Card(
@@ -95,45 +114,22 @@ class _TrainingTile extends StatelessWidget {
               Text(entry.durationLabel,
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               Text(DateFormat('HH:mm').format(entry.date),
-                  style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  style: const TextStyle(
+                      color: Colors.grey, fontSize: 12)),
             ],
           ),
-          onLongPress: () => _confirmDelete(context),
         ),
       );
 
-  void _confirmDelete(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete workout?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () {
-              ref.read(trainingProvider.notifier).delete(entry.id!);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _emoji(String type) => switch (type) {
-        'Gym' => '🏋️',
-        'Tennis' => '🎾',
-        'Running' => '🏃',
-        'Cycling' => '🚴',
+        'Gym'      => '🏋️',
+        'Tennis'   => '🎾',
+        'Running'  => '🏃',
+        'Cycling'  => '🚴',
         'Swimming' => '🏊',
-        'Walking' => '🚶',
-        'Yoga' => '🧘',
-        _ => '💪',
+        'Walking'  => '🚶',
+        'Yoga'     => '🧘',
+        _          => '💪',
       };
 }
 
@@ -141,14 +137,15 @@ class _AddTrainingDialog extends ConsumerStatefulWidget {
   const _AddTrainingDialog();
 
   @override
-  ConsumerState<_AddTrainingDialog> createState() => _AddTrainingDialogState();
+  ConsumerState<_AddTrainingDialog> createState() =>
+      _AddTrainingDialogState();
 }
 
 class _AddTrainingDialogState extends ConsumerState<_AddTrainingDialog> {
-  String _type = TrainingEntry.presets.first;
-  final _durationCtrl = TextEditingController();
-  final _notesCtrl = TextEditingController();
-  TimeOfDay _time = TimeOfDay.now();
+  String   _type = TrainingEntry.presets.first;
+  final    _durationCtrl = TextEditingController();
+  final    _notesCtrl    = TextEditingController();
+  TimeOfDay _time        = TimeOfDay.now();
 
   @override
   void dispose() {
@@ -158,10 +155,8 @@ class _AddTrainingDialogState extends ConsumerState<_AddTrainingDialog> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _time,
-    );
+    final picked =
+        await showTimePicker(context: context, initialTime: _time);
     if (picked != null) setState(() => _time = picked);
   }
 
@@ -196,7 +191,6 @@ class _AddTrainingDialogState extends ConsumerState<_AddTrainingDialog> {
                 ),
               ),
               const SizedBox(height: 12),
-              // Time picker
               OutlinedButton.icon(
                 onPressed: _pickTime,
                 icon: const Icon(Icons.access_time),
@@ -223,8 +217,8 @@ class _AddTrainingDialogState extends ConsumerState<_AddTrainingDialog> {
               final mins = int.tryParse(_durationCtrl.text);
               if (mins != null && mins > 0) {
                 final date = ref.read(selectedDateProvider);
-                final dateTime = DateTime(
-                    date.year, date.month, date.day, _time.hour, _time.minute);
+                final dateTime = DateTime(date.year, date.month,
+                    date.day, _time.hour, _time.minute);
                 ref.read(trainingProvider.notifier).add(
                       _type,
                       mins,

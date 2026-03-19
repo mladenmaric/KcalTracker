@@ -2,24 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../models/sleep_entry.dart';
 import '../providers/meals_provider.dart';
 import '../providers/sleep_provider.dart';
+import '../widgets/date_navigation.dart';
 
 class SleepScreen extends ConsumerWidget {
   const SleepScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final date = ref.watch(selectedDateProvider);
+    final date       = ref.watch(selectedDateProvider);
     final sleepAsync = ref.watch(sleepProvider);
     final recentAsync = ref.watch(recentSleepProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Sleep — ${DateFormat('MMM d').format(date)}'),
+        title: const DateNavigator(),
         actions: [
           IconButton(
             icon: const Icon(Icons.calendar_today),
+            tooltip: 'Jump to date',
             onPressed: () async {
               final picked = await showDatePicker(
                 context: context,
@@ -37,11 +40,11 @@ class SleepScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Today's sleep card ──────────────────────────────────────
+          // ── Sleep entry card ─────────────────────────────────────────
           sleepAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Error: $e'),
-            data: (entry) => _SleepCard(entry: entry),
+            error:   (e, _) => Text('Error: $e'),
+            data:    (entry) => _SleepCard(entry: entry),
           ),
           const SizedBox(height: 24),
 
@@ -50,14 +53,35 @@ class SleepScreen extends ConsumerWidget {
           const SizedBox(height: 8),
           recentAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Error: $e'),
-            data: (entries) {
+            error:   (e, _) => Text('Error: $e'),
+            data:    (entries) {
               if (entries.isEmpty) {
                 return const Text('No sleep data logged yet.',
                     style: TextStyle(color: Colors.grey));
               }
               return Column(
-                children: entries.map((e) => _SleepHistoryTile(entry: e)).toList(),
+                children: entries.map((e) {
+                  return Dismissible(
+                    key: Key('sleep-${e.id}'),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      color: Colors.red,
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 16),
+                      child: const Icon(Icons.delete, color: Colors.white),
+                    ),
+                    onDismissed: (_) {
+                      if (e.id != null) {
+                        ref.read(sleepProvider.notifier).delete(e.id!);
+                        ref.invalidate(recentSleepProvider);
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Sleep entry deleted')),
+                      );
+                    },
+                    child: _SleepHistoryTile(entry: e),
+                  );
+                }).toList(),
               );
             },
           ),
@@ -68,7 +92,7 @@ class SleepScreen extends ConsumerWidget {
 }
 
 class _SleepCard extends ConsumerStatefulWidget {
-  final dynamic entry;
+  final SleepEntry? entry;
   const _SleepCard({required this.entry});
 
   @override
@@ -83,16 +107,25 @@ class _SleepCardState extends ConsumerState<_SleepCard> {
   void initState() {
     super.initState();
     _sleepTime = widget.entry?.sleepTime;
-    _wakeTime = widget.entry?.wakeTime;
+    _wakeTime  = widget.entry?.wakeTime;
+  }
+
+  @override
+  void didUpdateWidget(_SleepCard old) {
+    super.didUpdateWidget(old);
+    // Sync when selected date changes (new entry loaded)
+    if (old.entry?.id != widget.entry?.id) {
+      _sleepTime = widget.entry?.sleepTime;
+      _wakeTime  = widget.entry?.wakeTime;
+    }
   }
 
   String _formatTime(String? t) => t ?? '—';
 
   Future<void> _pickTime(bool isSleep) async {
-    final now = TimeOfDay.now();
     final picked = await showTimePicker(
       context: context,
-      initialTime: now,
+      initialTime: TimeOfDay.now(),
       helpText: isSleep ? 'Bedtime' : 'Wake-up time',
     );
     if (picked == null) return;
@@ -110,7 +143,15 @@ class _SleepCardState extends ConsumerState<_SleepCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Recalculate duration from current state.
+    // Dynamic card title based on selected date
+    final date  = ref.read(selectedDateProvider);
+    final now   = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final cardTitle = date == today
+        ? "Tonight's Sleep"
+        : 'Sleep — ${DateFormat('EEE, MMM d').format(date)}';
+
+    // Recalculate duration from current state
     int? duration;
     final s = _parseTime(_sleepTime);
     final w = _parseTime(_wakeTime);
@@ -124,7 +165,7 @@ class _SleepCardState extends ConsumerState<_SleepCard> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Text("Tonight's Sleep",
+            Text(cardTitle,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
             Row(
@@ -187,10 +228,10 @@ class _SleepCardState extends ConsumerState<_SleepCard> {
 }
 
 class _TimeButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
+  final IconData    icon;
+  final String      label;
+  final String      value;
+  final Color       color;
   final VoidCallback onTap;
 
   const _TimeButton({
@@ -217,7 +258,8 @@ class _TimeButton extends StatelessWidget {
               Icon(icon, color: color, size: 28),
               const SizedBox(height: 4),
               Text(label,
-                  style: TextStyle(color: color, fontWeight: FontWeight.w500)),
+                  style: TextStyle(
+                      color: color, fontWeight: FontWeight.w500)),
               const SizedBox(height: 4),
               Text(value,
                   style: Theme.of(context)
@@ -231,7 +273,7 @@ class _TimeButton extends StatelessWidget {
 }
 
 class _SleepHistoryTile extends StatelessWidget {
-  final dynamic entry;
+  final SleepEntry entry;
   const _SleepHistoryTile({required this.entry});
 
   @override
@@ -243,7 +285,8 @@ class _SleepHistoryTile extends StatelessWidget {
             '${entry.sleepTime ?? '—'}  →  ${entry.wakeTime ?? '—'}'),
         trailing: Text(
           entry.durationLabel,
-          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, color: Colors.teal),
         ),
       );
 }

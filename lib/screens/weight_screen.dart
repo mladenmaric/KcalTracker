@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../models/weight_entry.dart';
 import '../providers/meals_provider.dart';
 import '../providers/weight_provider.dart';
 
@@ -10,15 +11,26 @@ class WeightScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final date = ref.watch(selectedDateProvider);
+    final date        = ref.watch(selectedDateProvider);
     final weightAsync = ref.watch(weightProvider);
+    final now         = DateTime.now();
+    final today       = DateTime(now.year, now.month, now.day);
+    final isToday     = date == today;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Weight — ${DateFormat('MMM d').format(date)}'),
+        // Title is just "Weight" — the list always shows recent history,
+        // not filtered by date. The date picker sets which date new entries
+        // will be logged to.
+        title: const Text('Weight'),
         actions: [
           IconButton(
             icon: const Icon(Icons.calendar_today),
+            // Tooltip shows current log date so user always knows what date
+            // a new entry will be saved to.
+            tooltip: isToday
+                ? 'Log date: today'
+                : 'Log date: ${DateFormat('MMM d').format(date)} — tap to change',
             onPressed: () async {
               final picked = await showDatePicker(
                 context: context,
@@ -35,39 +47,81 @@ class WeightScreen extends ConsumerWidget {
       ),
       body: weightAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (entries) => Column(
+        error:   (e, _) => Center(child: Text('Error: $e')),
+        data:    (entries) => Column(
           children: [
-            // ── Latest weight card ────────────────────────────────────
+            // ── Latest weight card ──────────────────────────────────────
             _LatestWeightCard(latest: entries.isEmpty ? null : entries.first),
+
+            // Show a banner when logging for a past date
+            if (!isToday)
+              MaterialBanner(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 6),
+                content: Text(
+                  'Logging for ${DateFormat('EEE, MMM d').format(date)}',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => ref
+                        .read(selectedDateProvider.notifier)
+                        .state = today,
+                    child: const Text('Back to today'),
+                  ),
+                ],
+              ),
+
             const Divider(height: 1),
 
-            // ── History list ──────────────────────────────────────────
+            // ── History list ────────────────────────────────────────────
             Expanded(
               child: entries.isEmpty
                   ? const Center(
-                      child: Text('No weight logged yet.\nTap + to add.',
+                      child: Text(
+                          'No weight logged yet.\nTap + to add.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.grey)))
                   : ListView.builder(
                       itemCount: entries.length,
                       itemBuilder: (context, i) {
                         final entry = entries[i];
-                        final prev = i < entries.length - 1 ? entries[i + 1] : null;
+                        final prev  = i < entries.length - 1
+                            ? entries[i + 1]
+                            : null;
                         final delta = prev != null
                             ? entry.weightKg - prev.weightKg
                             : null;
-                        return ListTile(
-                          leading: const Icon(Icons.monitor_weight_outlined),
-                          title: Text(
-                              '${entry.weightKg.toStringAsFixed(1)} kg'),
-                          subtitle: Text(
-                              DateFormat('EEE, MMM d').format(entry.date)),
-                          trailing: delta != null
-                              ? _DeltaChip(delta: delta)
-                              : null,
-                          onLongPress: () =>
-                              _confirmDelete(context, ref, entry.id!),
+                        return Dismissible(
+                          key: Key('weight-${entry.id}'),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            color: Colors.red,
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 16),
+                            child: const Icon(Icons.delete,
+                                color: Colors.white),
+                          ),
+                          onDismissed: (_) {
+                            ref
+                                .read(weightProvider.notifier)
+                                .delete(entry.id!);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Entry deleted')),
+                            );
+                          },
+                          child: ListTile(
+                            leading: const Icon(
+                                Icons.monitor_weight_outlined),
+                            title: Text(
+                                '${entry.weightKg.toStringAsFixed(1)} kg'),
+                            subtitle: Text(DateFormat('EEE, MMM d')
+                                .format(entry.date)),
+                            trailing: delta != null
+                                ? _DeltaChip(delta: delta)
+                                : null,
+                          ),
                         );
                       },
                     ),
@@ -75,28 +129,46 @@ class WeightScreen extends ConsumerWidget {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddDialog(context, ref),
-        child: const Icon(Icons.add),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddDialog(context, ref, date, isToday),
+        icon: const Icon(Icons.add),
+        label: const Text('Log Weight'),
       ),
     );
   }
 
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
+  void _showAddDialog(
+      BuildContext context, WidgetRef ref, DateTime date, bool isToday) {
     final ctrl = TextEditingController();
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Log Weight'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Weight',
-            suffixText: 'kg',
-            border: OutlineInputBorder(),
-          ),
-          autofocus: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isToday)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Logging for ${DateFormat('EEE, MMM d').format(date)}',
+                  style: TextStyle(
+                      color: Colors.orange.shade700, fontSize: 12),
+                ),
+              ),
+            TextField(
+              controller: ctrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Weight',
+                suffixText: 'kg',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -104,7 +176,8 @@ class WeightScreen extends ConsumerWidget {
               child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
-              final kg = double.tryParse(ctrl.text.replaceAll(',', '.'));
+              final kg =
+                  double.tryParse(ctrl.text.replaceAll(',', '.'));
               if (kg != null && kg > 0) {
                 ref.read(weightProvider.notifier).add(kg);
                 Navigator.pop(ctx);
@@ -116,33 +189,10 @@ class WeightScreen extends ConsumerWidget {
       ),
     );
   }
-
-  void _confirmDelete(BuildContext context, WidgetRef ref, int id) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete entry?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () {
-              ref.read(weightProvider.notifier).delete(id);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _LatestWeightCard extends StatelessWidget {
-  final dynamic latest;
+  final WeightEntry? latest;
   const _LatestWeightCard({required this.latest});
 
   @override
@@ -151,7 +201,8 @@ class _LatestWeightCard extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.monitor_weight_outlined, size: 36, color: Colors.teal),
+            const Icon(Icons.monitor_weight_outlined,
+                size: 36, color: Colors.teal),
             const SizedBox(width: 12),
             latest == null
                 ? Text('No data yet',
@@ -160,14 +211,16 @@ class _LatestWeightCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${latest.weightKg.toStringAsFixed(1)} kg',
+                        '${latest!.weightKg.toStringAsFixed(1)} kg',
                         style: Theme.of(context)
                             .textTheme
                             .headlineMedium
-                            ?.copyWith(fontWeight: FontWeight.bold, color: Colors.teal),
+                            ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.teal),
                       ),
                       Text(
-                        'Last logged ${DateFormat('MMM d').format(latest.date)}',
+                        'Last logged ${DateFormat('MMM d').format(latest!.date)}',
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -186,9 +239,9 @@ class _DeltaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isUp = delta > 0;
+    final isUp  = delta > 0;
     final color = isUp ? Colors.red : Colors.green;
-    final icon = isUp ? Icons.arrow_upward : Icons.arrow_downward;
+    final icon  = isUp ? Icons.arrow_upward : Icons.arrow_downward;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
