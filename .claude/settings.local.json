@@ -3,7 +3,9 @@
     "allow": [
       "Bash(flutter analyze:*)",
       "WebFetch(domain:onefit.rs)",
-      "WebFetch(domain:www.tablicakalorija.com)"
+      "WebFetch(domain:www.tablicakalorija.com)",
+      "Bash(python3 extract_foods.py)",
+      "Bash(curl -s \"https://www.tablicakalorija.com/?paged=N\")"
     ]
   }
 }
