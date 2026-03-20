@@ -1,65 +1,79 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../database/database_helper.dart';
 import '../models/food_item.dart';
 import '../models/meal.dart';
+import 'auth_provider.dart';
 
 // selectedDateProvider holds the date the user is currently viewing.
-// Changing this date causes mealsProvider to re-fetch automatically.
 final selectedDateProvider = StateProvider<DateTime>((ref) {
   final now = DateTime.now();
-  return DateTime(now.year, now.month, now.day); // midnight = "today"
+  return DateTime(now.year, now.month, now.day);
 });
 
-// mealsProvider fetches all meals (with food items) for the selected date.
-// It is an AsyncNotifier so we can also mutate the list (add/delete).
 final mealsProvider =
     AsyncNotifierProvider<MealsNotifier, List<Meal>>(MealsNotifier.new);
 
 class MealsNotifier extends AsyncNotifier<List<Meal>> {
+  SupabaseClient get _db  => Supabase.instance.client;
+  String         get _uid => _db.auth.currentUser!.id;
+
   @override
   Future<List<Meal>> build() async {
-    // Re-run whenever selectedDate changes.
-    final date = ref.watch(selectedDateProvider);
-    return DatabaseHelper.instance.getMealsForDate(date);
+    // Re-fetch whenever the logged-in user changes (e.g. after account switch).
+    ref.watch(currentUserProvider);
+    final date  = ref.watch(selectedDateProvider);
+    final start = DateTime(date.year, date.month, date.day);
+    final end   = DateTime(date.year, date.month, date.day, 23, 59, 59, 999);
+
+    final data = await _db
+        .from('meals')
+        .select('*, food_items(*)')
+        .eq('user_id', _uid)
+        .gte('date', start.toIso8601String())
+        .lte('date', end.toIso8601String())
+        .order('date');
+
+    return data.map<Meal>((m) {
+      final items = (m['food_items'] as List)
+          .map((fi) => FoodItem.fromMap(fi as Map<String, dynamic>))
+          .toList();
+      return Meal.fromMap(m).copyWith(foodItems: items);
+    }).toList();
   }
 
-  // Add a new meal (without food items yet) and refresh.
   Future<Meal> addMeal(String name, DateTime dateTime) async {
-    final meal = Meal(name: name, date: dateTime);
-    final id = await DatabaseHelper.instance.insertMeal(meal);
-    final created = meal.copyWith(id: id);
-    // Optimistically update state.
-    state = AsyncData([...state.value ?? [], created]);
-    return created;
+    final data = await _db
+        .from('meals')
+        .insert({'user_id': _uid, 'name': name, 'date': dateTime.toIso8601String()})
+        .select()
+        .single();
+    final meal = Meal.fromMap(data).copyWith(foodItems: []);
+    state = AsyncData([...state.value ?? [], meal]);
+    return meal;
   }
 
-  // Add a food item to an existing meal and refresh.
   Future<void> addFoodItem(FoodItem item) async {
-    await DatabaseHelper.instance.insertFoodItem(item);
-    // Full reload so totals are recalculated.
+    final map = item.toMap()..remove('id');
+    await _db.from('food_items').insert(map);
     ref.invalidateSelf();
   }
 
-  // Delete a meal and all its food items.
   Future<void> deleteMeal(int mealId) async {
-    await DatabaseHelper.instance.deleteMeal(mealId);
+    await _db.from('meals').delete().eq('id', mealId);
     ref.invalidateSelf();
   }
 
-  // Delete a single food item.
   Future<void> deleteFoodItem(int foodItemId) async {
-    await DatabaseHelper.instance.deleteFoodItem(foodItemId);
+    await _db.from('food_items').delete().eq('id', foodItemId);
     ref.invalidateSelf();
   }
 }
 
-// Derived provider: total calories for the selected day.
 final totalCaloriesProvider = Provider<double>((ref) {
-  final mealsAsync = ref.watch(mealsProvider);
-  return mealsAsync.when(
-    data: (meals) => meals.fold(0.0, (sum, m) => sum + m.totalCalories),
+  return ref.watch(mealsProvider).when(
+    data:    (meals) => meals.fold(0.0, (s, m) => s + m.totalCalories),
     loading: () => 0.0,
-    error: (_, _) => 0.0,
+    error:   (_, _) => 0.0,
   );
 });

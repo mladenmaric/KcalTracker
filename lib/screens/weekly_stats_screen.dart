@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../database/database_helper.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../models/food_item.dart';
 import '../models/meal.dart';
 import '../models/sleep_entry.dart';
 import '../models/training_entry.dart';
@@ -46,18 +48,33 @@ class _WeeklyStatsScreenState extends ConsumerState<WeeklyStatsScreen> {
   DateTime get _weekEnd => _weekStart.add(const Duration(days: 6));
 
   Future<_WeekData> _fetchAll() async {
-    final db = DatabaseHelper.instance;
+    final db  = Supabase.instance.client;
+    final uid = db.auth.currentUser!.id;
+
+    final start    = _weekStart.toIso8601String();
+    final end      = _weekEnd.add(const Duration(hours: 23, minutes: 59, seconds: 59)).toIso8601String();
+    final startDate = _weekStart.toIso8601String().substring(0, 10);
+    final endDate   = _weekEnd.toIso8601String().substring(0, 10);
+
     final results = await Future.wait([
-      db.getMealsForDateRange(_weekStart, _weekEnd),
-      db.getSleepForDateRange(_weekStart, _weekEnd),
-      db.getTrainingForDateRange(_weekStart, _weekEnd),
-      db.getWeightForDateRange(_weekStart, _weekEnd),
+      db.from('meals').select('*, food_items(*)').eq('user_id', uid).gte('date', start).lte('date', end),
+      db.from('sleep_entries').select().eq('user_id', uid).gte('date', startDate).lte('date', endDate),
+      db.from('training_entries').select().eq('user_id', uid).gte('date', start).lte('date', end),
+      db.from('weight_entries').select().eq('user_id', uid).gte('date', start).lte('date', end),
     ]);
+
+    final meals = (results[0] as List).map((m) {
+      final items = (m['food_items'] as List)
+          .map((fi) => FoodItem.fromMap(fi as Map<String, dynamic>))
+          .toList();
+      return Meal.fromMap(m).copyWith(foodItems: items);
+    }).toList();
+
     return (
-      meals:    results[0] as List<Meal>,
-      sleep:    results[1] as List<SleepEntry>,
-      training: results[2] as List<TrainingEntry>,
-      weight:   results[3] as List<WeightEntry>,
+      meals:    meals,
+      sleep:    (results[1] as List).map((e) => SleepEntry.fromMap(e)).toList(),
+      training: (results[2] as List).map((e) => TrainingEntry.fromMap(e)).toList(),
+      weight:   (results[3] as List).map((e) => WeightEntry.fromMap(e)).toList(),
     );
   }
 

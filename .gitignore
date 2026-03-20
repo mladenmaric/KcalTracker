@@ -1,5 +1,6 @@
 # Secrets — never commit real API keys
 lib/services/secrets.dart
+lib/config.dart
 
 # Miscellaneous
 *.class
