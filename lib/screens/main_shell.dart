@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-// MainShell wraps the 4 main tabs with a shared bottom navigation bar.
-// GoRouter's ShellRoute keeps this widget alive while navigating between tabs.
-class MainShell extends StatelessWidget {
+import '../providers/auth_provider.dart';
+
+class MainShell extends ConsumerWidget {
   final Widget child;
   const MainShell({super.key, required this.child});
 
@@ -17,7 +18,6 @@ class MainShell extends StatelessWidget {
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
-    // Match the most specific tab first.
     for (var i = _tabs.length - 1; i >= 0; i--) {
       if (location.startsWith(_tabs[i].path) &&
           (_tabs[i].path == '/' ? location == '/' : true)) {
@@ -28,7 +28,10 @@ class MainShell extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Activates the Supabase Realtime subscription for trainer comment notifications.
+    ref.watch(commentNotificationProvider);
+
     return Scaffold(
       body: child,
       bottomNavigationBar: NavigationBar(

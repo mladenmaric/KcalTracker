@@ -45,6 +45,8 @@ class HomeScreen extends ConsumerWidget {
           PopupMenuButton<_MenuAction>(
             onSelected: (action) async {
               switch (action) {
+                case _MenuAction.profile:
+                  context.pushNamed('profile');
                 case _MenuAction.weeklyStats:
                   context.pushNamed('weekly-stats');
                 case _MenuAction.goals:
@@ -64,6 +66,14 @@ class HomeScreen extends ConsumerWidget {
             itemBuilder: (_) {
               final profile = profileAsync.valueOrNull;
               return [
+                const PopupMenuItem(
+                  value: _MenuAction.profile,
+                  child: ListTile(
+                    leading: Icon(Icons.account_circle_outlined),
+                    title: Text('Profile'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
                 const PopupMenuItem(
                   value: _MenuAction.weeklyStats,
                   child: ListTile(
@@ -288,7 +298,7 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-enum _MenuAction { weeklyStats, goals, foodDatabase, history, adminPanel, myAthletes, signOut }
+enum _MenuAction { profile, weeklyStats, goals, foodDatabase, history, adminPanel, myAthletes, signOut }
 
 // ── Trainer comment bubble (read-only, shown inside each meal card) ──────────
 
@@ -299,6 +309,7 @@ class _TrainerCommentBubble extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final commentsAsync = ref.watch(mealCommentsProvider(mealId));
+    final trainerName   = ref.watch(myTrainerProvider).valueOrNull?.displayName ?? 'Trainer';
 
     return commentsAsync.when(
       loading: () => const SizedBox.shrink(),
@@ -327,7 +338,7 @@ class _TrainerCommentBubble extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        c.trainerName ?? 'Trainer',
+                        trainerName,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,

@@ -21,8 +21,10 @@ import '../screens/plan_history_screen.dart';
 import '../screens/planner_screen.dart';
 import '../screens/sleep_screen.dart';
 import '../screens/training_screen.dart';
+import '../screens/profile_screen.dart';
 import '../screens/weekly_stats_screen.dart';
 import '../screens/weight_screen.dart';
+import '../services/notification_service.dart';
 
 // ── Supabase client ──────────────────────────────────────────────────────────
 
@@ -58,6 +60,50 @@ final profileProvider = FutureProvider<AppProfile?>((ref) async {
       .single();
 
   return AppProfile.fromMap(data);
+});
+
+// ── Current user's assigned trainer (if any) ─────────────────────────────────
+
+final myTrainerProvider = FutureProvider<AppProfile?>((ref) async {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return null;
+
+  final db   = ref.watch(supabaseClientProvider);
+  final data = await db
+      .from('trainer_assignments')
+      .select('trainer:profiles!trainer_id(id, display_name, role)')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+  if (data == null) return null;
+  return AppProfile.fromMap(data['trainer'] as Map<String, dynamic>);
+});
+
+// ── Realtime: notify athlete when trainer posts a new comment ─────────────────
+
+final commentNotificationProvider = Provider<void>((ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return;
+
+  final channel = Supabase.instance.client
+      .channel('athlete-comment-notifications')
+      .onPostgresChanges(
+        event:    PostgresChangeEvent.insert,
+        schema:   'public',
+        table:    'meal_comments',
+        callback: (payload) {
+          final trainerId = payload.newRecord['trainer_id'] as String?;
+          // Don't notify the trainer about their own comment.
+          if (trainerId == user.id) return;
+          NotificationService.show(
+            title: 'Trainer feedback',
+            body:  'Your trainer left a comment on one of your meals.',
+          );
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() => channel.unsubscribe());
 });
 
 // ── Router notifier — tells GoRouter to re-evaluate redirect on auth change ──
@@ -196,6 +242,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           userId:   state.pathParameters['userId']!,
           userName: state.extra as String? ?? '',
         ),
+      ),
+      GoRoute(
+        path: '/profile',
+        name: 'profile',
+        builder: (ctx, st) => const ProfileScreen(),
       ),
     ],
   );

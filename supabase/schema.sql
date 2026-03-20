@@ -341,6 +341,16 @@ create policy "Trainers view assigned users goals"
   ));
 
 
+-- ── 12. Realtime ─────────────────────────────────────────────
+-- Enable Realtime on tables that need live sync in the app.
+-- meals + food_items: trainer view refreshes when athlete logs data.
+-- meal_comments: athlete home screen updates when trainer adds/edits/deletes a comment.
+
+alter publication supabase_realtime add table public.meals;
+alter publication supabase_realtime add table public.food_items;
+alter publication supabase_realtime add table public.meal_comments;
+
+
 -- ── Post-setup: manually set the first admin ─────────────────
 -- After running this file, set your own account as admin via:
 --   Dashboard → Table Editor → profiles → edit your row → set role = 'admin'

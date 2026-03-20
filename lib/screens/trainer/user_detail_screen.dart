@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/meal.dart';
 import '../../models/meal_comment.dart';
@@ -25,6 +26,49 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     final now = DateTime.now();
     return DateTime(now.year, now.month, now.day);
   }();
+
+  RealtimeChannel? _mealsChannel;
+  RealtimeChannel? _foodItemsChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    final db = Supabase.instance.client;
+
+    // Invalidate whenever the athlete adds/edits/deletes a meal.
+    _mealsChannel = db
+        .channel('trainer-meals-${widget.userId}')
+        .onPostgresChanges(
+          event:    PostgresChangeEvent.all,
+          schema:   'public',
+          table:    'meals',
+          filter:   PostgresChangeFilter(
+            type:   PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value:  widget.userId,
+          ),
+          callback: (_) => ref.invalidate(trainerUserMealsProvider),
+        )
+        .subscribe();
+
+    // Invalidate whenever the athlete adds/removes food items within a meal.
+    _foodItemsChannel = db
+        .channel('trainer-food-items-${widget.userId}')
+        .onPostgresChanges(
+          event:    PostgresChangeEvent.all,
+          schema:   'public',
+          table:    'food_items',
+          callback: (_) => ref.invalidate(trainerUserMealsProvider),
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _mealsChannel?.unsubscribe();
+    _foodItemsChannel?.unsubscribe();
+    super.dispose();
+  }
 
   void _shiftDate(int days) {
     final next     = _date.add(Duration(days: days));

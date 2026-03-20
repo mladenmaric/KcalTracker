@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'providers/auth_provider.dart';
 import 'router/app_router.dart';
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +14,8 @@ Future<void> main() async {
     url:     supabaseUrl,
     anonKey: supabaseAnonKey,
   );
+
+  await NotificationService.init();
 
   runApp(const ProviderScope(child: KcalTrackerApp()));
 }

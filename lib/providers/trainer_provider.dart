@@ -75,20 +75,16 @@ final trainerCommentProvider =
   },
 );
 
-// ── All comments on a meal (athlete read-only view) ─────────────────────────
+// ── All comments on a meal (athlete read-only view, live stream) ─────────────
+// StreamProvider so inserts and deletes update the UI automatically.
 
 final mealCommentsProvider =
-    FutureProvider.family<List<MealComment>, int>((ref, mealId) async {
-  final db   = Supabase.instance.client;
-  final data = await db
+    StreamProvider.family<List<MealComment>, int>((ref, mealId) {
+  return Supabase.instance.client
       .from('meal_comments')
-      .select('*, trainer:profiles!trainer_id(display_name)')
+      .stream(primaryKey: ['id'])
       .eq('meal_id', mealId)
-      .order('created_at');
-  return data.map((m) {
-    final trainerName = (m['trainer'] as Map?)?['display_name'] as String?;
-    return MealComment.fromMap({...m, 'trainer_name': trainerName});
-  }).toList();
+      .map((rows) => rows.map((m) => MealComment.fromMap(m)).toList());
 });
 
 // ── Comment service (save / delete) ─────────────────────────────────────────
