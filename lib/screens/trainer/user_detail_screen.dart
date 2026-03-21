@@ -99,8 +99,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
           controller: _tabController,
           tabs: const [
             Tab(icon: Icon(Icons.restaurant_menu),         text: 'Meals'),
-            Tab(icon: Icon(Icons.monitor_weight_outlined), text: 'Weight'),
             Tab(icon: Icon(Icons.bedtime_outlined),        text: 'Sleep'),
+            Tab(icon: Icon(Icons.monitor_weight_outlined), text: 'Weight'),
             Tab(icon: Icon(Icons.fitness_center),          text: 'Training'),
           ],
         ),
@@ -113,8 +113,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen>
               controller: _tabController,
               children: [
                 _MealsTab(userId: widget.userId, date: _date),
-                _WeightTab(userId: widget.userId, date: _date),
                 _SleepTab(userId: widget.userId, date: _date),
+                _WeightTab(userId: widget.userId, date: _date),
                 _TrainingTab(userId: widget.userId, date: _date),
               ],
             ),
