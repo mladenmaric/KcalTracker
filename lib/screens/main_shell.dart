@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/auth_provider.dart';
+import '../providers/meals_provider.dart';
 
 class MainShell extends ConsumerWidget {
   final Widget child;
@@ -31,6 +32,15 @@ class MainShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Activates the Supabase Realtime subscription for trainer comment notifications.
     ref.watch(commentNotificationProvider);
+
+    // Reset the selected date to today whenever the logged-in user changes.
+    ref.listen(currentUserProvider, (prev, next) {
+      if (prev?.id != next?.id) {
+        final now = DateTime.now();
+        ref.read(selectedDateProvider.notifier).state =
+            DateTime(now.year, now.month, now.day);
+      }
+    });
 
     return Scaffold(
       body: child,

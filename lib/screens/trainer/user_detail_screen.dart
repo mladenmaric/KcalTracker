@@ -47,7 +47,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
             column: 'user_id',
             value:  widget.userId,
           ),
-          callback: (_) => ref.invalidate(trainerUserMealsProvider),
+          callback: (_) => ref.invalidate(
+              trainerUserMealsProvider((userId: widget.userId, date: _date))),
         )
         .subscribe();
 
@@ -58,7 +59,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
           event:    PostgresChangeEvent.all,
           schema:   'public',
           table:    'food_items',
-          callback: (_) => ref.invalidate(trainerUserMealsProvider),
+          callback: (_) => ref.invalidate(
+              trainerUserMealsProvider((userId: widget.userId, date: _date))),
         )
         .subscribe();
   }
@@ -112,28 +114,38 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
           ),
         ),
       ),
-      body: mealsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error:   (e, _) => Center(child: Text('Error: $e')),
-        data:    (meals) {
-          if (meals.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Text(
-                  'No meals logged for this date.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
+      body: RefreshIndicator(
+        onRefresh: () async =>
+            ref.invalidate(trainerUserMealsProvider((userId: widget.userId, date: _date))),
+        child: mealsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error:   (e, _) => ListView(children: [Center(child: Text('Error: $e'))]),
+          data:    (meals) {
+            if (meals.isEmpty) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: Text(
+                        'No meals logged for this date.',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+            return ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(12),
+              itemCount: meals.length,
+              itemBuilder: (context, i) =>
+                  _MealCard(meal: meals[i], userId: widget.userId),
             );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: meals.length,
-            itemBuilder: (context, i) =>
-                _MealCard(meal: meals[i], userId: widget.userId),
-          );
-        },
+          },
+        ),
       ),
     );
   }

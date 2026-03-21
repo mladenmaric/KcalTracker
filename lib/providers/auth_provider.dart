@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/app_profile.dart';
+import 'trainer_provider.dart';
 import '../screens/admin/admin_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
@@ -88,12 +89,16 @@ final commentNotificationProvider = Provider<void>((ref) {
   final channel = Supabase.instance.client
       .channel('athlete-comment-notifications')
       .onPostgresChanges(
-        event:    PostgresChangeEvent.insert,
+        event:    PostgresChangeEvent.all,
         schema:   'public',
         table:    'meal_comments',
         callback: (payload) {
+          // Invalidate so the athlete's home screen re-fetches comments.
+          ref.invalidate(mealCommentsProvider);
+
+          // Only show a notification for new comments not posted by this user.
+          if (payload.eventType != PostgresChangeEvent.insert) return;
           final trainerId = payload.newRecord['trainer_id'] as String?;
-          // Don't notify the trainer about their own comment.
           if (trainerId == user.id) return;
           NotificationService.show(
             title: 'Trainer feedback',

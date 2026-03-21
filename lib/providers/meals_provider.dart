@@ -32,7 +32,7 @@ class MealsNotifier extends AsyncNotifier<List<Meal>> {
         .eq('user_id', _uid)
         .gte('date', start.toIso8601String())
         .lte('date', end.toIso8601String())
-        .order('date');
+        .order('date', ascending: true);
 
     return data.map<Meal>((m) {
       final items = (m['food_items'] as List)

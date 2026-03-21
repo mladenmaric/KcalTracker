@@ -45,7 +45,7 @@ final trainerUserMealsProvider =
         .eq('user_id', args.userId)
         .gte('date', start.toIso8601String())
         .lte('date', end.toIso8601String())
-        .order('date');
+        .order('date', ascending: true);
 
     return data.map<Meal>((m) {
       final items = (m['food_items'] as List)
@@ -75,16 +75,18 @@ final trainerCommentProvider =
   },
 );
 
-// ── All comments on a meal (athlete read-only view, live stream) ─────────────
-// StreamProvider so inserts and deletes update the UI automatically.
+// ── All comments on a meal (athlete read-only view) ──────────────────────────
+// FutureProvider so it works reliably on all platforms regardless of Realtime
+// publication status. Invalidated by commentNotificationProvider on any change.
 
 final mealCommentsProvider =
-    StreamProvider.family<List<MealComment>, int>((ref, mealId) {
-  return Supabase.instance.client
+    FutureProvider.family<List<MealComment>, int>((ref, mealId) async {
+  final data = await Supabase.instance.client
       .from('meal_comments')
-      .stream(primaryKey: ['id'])
+      .select()
       .eq('meal_id', mealId)
-      .map((rows) => rows.map((m) => MealComment.fromMap(m)).toList());
+      .order('created_at');
+  return data.map((m) => MealComment.fromMap(m)).toList();
 });
 
 // ── Comment service (save / delete) ─────────────────────────────────────────
